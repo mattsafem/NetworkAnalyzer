@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(tree:*)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(open:*)",
+      "Bash(defaults read:*)",
+      "Bash(systemextensionsctl list:*)",
+      "Bash(cat:*)",
+      "Bash(log show:*)",
+      "Bash(log stream:*)",
+      "Bash(sudo systemextensionsctl reset:*)",
+      "Bash(ls:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:www.avanderlee.com)"
+    ]
+  }
+}
