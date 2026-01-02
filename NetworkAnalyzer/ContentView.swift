@@ -122,12 +122,9 @@ struct ContentView: View {
     }
 
     private func updateMonitoringState() {
-        if filterManager.state.isEnabled && extensionManager.state.isActive {
-            log.info("Starting log monitoring (filter enabled, extension active)")
+        if !logger.isMonitoring {
+            log.info("Starting log monitoring (app active)")
             logger.startMonitoring()
-        } else {
-            log.info("Stopping log monitoring (filter or extension inactive)")
-            logger.stopMonitoring()
         }
     }
 }

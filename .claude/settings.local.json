@@ -14,7 +14,18 @@
       "Bash(sudo systemextensionsctl reset:*)",
       "Bash(ls:*)",
       "Bash(curl:*)",
-      "WebFetch(domain:www.avanderlee.com)"
+      "WebFetch(domain:www.avanderlee.com)",
+      "Bash(xcodebuild:*)",
+      "Bash(ditto:*)",
+      "Bash(/bin/bash -c \"log stream --predicate ''subsystem CONTAINS \"\"safeme\"\"'' --timeout 5\")",
+      "Bash(/bin/bash -c \"log show --last 5m --predicate ''subsystem CONTAINS \"\"safeme\"\"'' 2>&1 | tail -50\")",
+      "Bash(/bin/bash -c \"log stream --predicate ''subsystem CONTAINS \"\"safeme\"\"'' --timeout 10 2>&1\")",
+      "Bash(/bin/bash -c \"log show --last 2m --predicate ''subsystem CONTAINS \"\"safeme\"\"'' 2>&1 | tail -80\")",
+      "Bash(/bin/bash -c \"log show --last 1m --predicate ''subsystem CONTAINS \"\"safeme\"\"'' 2>&1 | grep -i ''block\\\\|path\\\\|drop\\\\|reload''\")",
+      "Bash(/bin/bash:*)",
+      "Bash(chmod:*)",
+      "Bash(sudo chown:*)",
+      "Bash(sudo chmod:*)"
     ]
   }
 }

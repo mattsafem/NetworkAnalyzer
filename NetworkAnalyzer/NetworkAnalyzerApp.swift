@@ -42,6 +42,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         _ = SystemExtensionManager.shared
         _ = FilterManager.shared
         _ = NetworkLogger.shared
+        SystemExtensionManager.shared.refreshExtensionState()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

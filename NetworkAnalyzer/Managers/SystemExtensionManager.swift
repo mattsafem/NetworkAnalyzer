@@ -54,6 +54,7 @@ class SystemExtensionManager: NSObject, ObservableObject {
 
     private var activationCompletion: ((Result<Void, Error>) -> Void)?
     private var deactivationCompletion: ((Result<Void, Error>) -> Void)?
+    private var pendingPropertiesRequest = false
 
     private override init() {
         super.init()
@@ -110,6 +111,26 @@ class SystemExtensionManager: NSObject, ObservableObject {
             OSSystemExtensionManager.shared.submitRequest(request)
         }
     }
+
+    func refreshExtensionState() {
+        guard state != .activating, state != .deactivating else {
+            return
+        }
+
+        guard #available(macOS 12.0, *) else {
+            log.info("System extension status query requires macOS 12+")
+            return
+        }
+
+        log.info("Refreshing system extension status")
+        pendingPropertiesRequest = true
+        let request = OSSystemExtensionRequest.propertiesRequest(
+            forExtensionWithIdentifier: extensionBundleIdentifier,
+            queue: .main
+        )
+        request.delegate = self
+        OSSystemExtensionManager.shared.submitRequest(request)
+    }
 }
 
 // MARK: - OSSystemExtensionRequestDelegate
@@ -117,6 +138,11 @@ class SystemExtensionManager: NSObject, ObservableObject {
 extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
     nonisolated func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
         Task { @MainActor in
+            if pendingPropertiesRequest {
+                pendingPropertiesRequest = false
+                return
+            }
+
             log.info("System extension request finished with result: \(String(describing: result), privacy: .public)")
 
             switch result {
@@ -142,6 +168,14 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
 
     nonisolated func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
         Task { @MainActor in
+            if pendingPropertiesRequest {
+                pendingPropertiesRequest = false
+                log.error("System extension status query failed: \(error.localizedDescription, privacy: .public)")
+                state = .notInstalled
+                statusMessage = "System extension not installed"
+                return
+            }
+
             log.error("System extension request failed: \(error.localizedDescription, privacy: .public)")
 
             let nsError = error as NSError
@@ -173,6 +207,33 @@ extension SystemExtensionManager: OSSystemExtensionRequestDelegate {
             log.info("System extension needs user approval")
             state = .needsUserApproval
             statusMessage = "Please approve the system extension in System Settings > Privacy & Security"
+        }
+    }
+
+    nonisolated func request(_ request: OSSystemExtensionRequest, foundProperties properties: [OSSystemExtensionProperties]) {
+        Task { @MainActor in
+            guard pendingPropertiesRequest else { return }
+            pendingPropertiesRequest = false
+
+            guard let properties = properties.first else {
+                state = .notInstalled
+                statusMessage = "System extension not installed"
+                log.info("System extension not installed")
+                return
+            }
+
+            if properties.isAwaitingUserApproval {
+                state = .needsUserApproval
+                statusMessage = "System extension awaiting user approval"
+            } else if properties.isEnabled {
+                state = .activated
+                statusMessage = "System extension active"
+            } else {
+                state = .notInstalled
+                statusMessage = "System extension installed but disabled"
+            }
+
+            log.info("System extension status refreshed (enabled=\(properties.isEnabled, privacy: .public), awaitingApproval=\(properties.isAwaitingUserApproval, privacy: .public))")
         }
     }
 

@@ -20,6 +20,19 @@ struct ConnectionLogEntry: Identifiable, Codable {
     let remotePort: String
     let direction: String
     let action: String
+    let localHost: String?
+    let localPort: String?
+    let remoteHostname: String?
+    let protocolName: String?
+    let socketFamily: Int?
+    let socketType: Int?
+    let socketProtocol: Int?
+    let pid: Int?
+    let processPath: String?
+    let processName: String?
+    let flowIdentifier: String?
+    let url: String?
+    let tokenSource: String?
 
     init(
         id: UUID = UUID(),
@@ -28,7 +41,20 @@ struct ConnectionLogEntry: Identifiable, Codable {
         remoteHost: String,
         remotePort: String,
         direction: String,
-        action: String = "allowed"
+        action: String = "allowed",
+        localHost: String? = nil,
+        localPort: String? = nil,
+        remoteHostname: String? = nil,
+        protocolName: String? = nil,
+        socketFamily: Int? = nil,
+        socketType: Int? = nil,
+        socketProtocol: Int? = nil,
+        pid: Int? = nil,
+        processPath: String? = nil,
+        processName: String? = nil,
+        flowIdentifier: String? = nil,
+        url: String? = nil,
+        tokenSource: String? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -37,6 +63,19 @@ struct ConnectionLogEntry: Identifiable, Codable {
         self.remotePort = remotePort
         self.direction = direction
         self.action = action
+        self.localHost = localHost
+        self.localPort = localPort
+        self.remoteHostname = remoteHostname
+        self.protocolName = protocolName
+        self.socketFamily = socketFamily
+        self.socketType = socketType
+        self.socketProtocol = socketProtocol
+        self.pid = pid
+        self.processPath = processPath
+        self.processName = processName
+        self.flowIdentifier = flowIdentifier
+        self.url = url
+        self.tokenSource = tokenSource
     }
 }
 
@@ -132,21 +171,54 @@ class NetworkLogger: ObservableObject {
         }
     }
 
+    func clearLogs(appIdentifier: String?) {
+        guard let appIdentifier = appIdentifier else {
+            clearLogs()
+            return
+        }
+
+        log.info("Clearing logs for app \(appIdentifier, privacy: .public)")
+        logs.removeAll { $0.sourceApp == appIdentifier }
+    }
+
     func exportLogs() -> String {
         let dateFormatter = ISO8601DateFormatter()
         log.info("Exporting \(self.logs.count, privacy: .public) log entries to CSV")
-        var csv = "Timestamp,Source App,Remote Host,Port,Direction,Action\n"
+        var csv = "Timestamp,Source App,Remote Host,Port,Direction,Action,Local Host,Local Port,Remote Hostname,Protocol,Socket Family,Socket Type,Socket Protocol,PID,Process Path,Process Name,Flow ID,URL,Token Source\n"
 
         for entry in logs {
-            csv += "\(dateFormatter.string(from: entry.timestamp)),"
-            csv += "\"\(entry.sourceApp)\","
-            csv += "\"\(entry.remoteHost)\","
-            csv += "\(entry.remotePort),"
-            csv += "\(entry.direction),"
-            csv += "\(entry.action)\n"
+            csv += "\(escapeCSV(dateFormatter.string(from: entry.timestamp))),"
+            csv += "\(escapeCSV(entry.sourceApp)),"
+            csv += "\(escapeCSV(entry.remoteHost)),"
+            csv += "\(escapeCSV(entry.remotePort)),"
+            csv += "\(escapeCSV(entry.direction)),"
+            csv += "\(escapeCSV(entry.action)),"
+            csv += "\(escapeCSV(entry.localHost ?? "")),"
+            csv += "\(escapeCSV(entry.localPort ?? "")),"
+            csv += "\(escapeCSV(entry.remoteHostname ?? "")),"
+            csv += "\(escapeCSV(entry.protocolName ?? "")),"
+            csv += "\(escapeCSV(entry.socketFamily.map(String.init) ?? "")),"
+            csv += "\(escapeCSV(entry.socketType.map(String.init) ?? "")),"
+            csv += "\(escapeCSV(entry.socketProtocol.map(String.init) ?? "")),"
+            csv += "\(escapeCSV(entry.pid.map(String.init) ?? "")),"
+            csv += "\(escapeCSV(entry.processPath ?? "")),"
+            csv += "\(escapeCSV(entry.processName ?? "")),"
+            csv += "\(escapeCSV(entry.flowIdentifier ?? "")),"
+            csv += "\(escapeCSV(entry.url ?? "")),"
+            csv += "\(escapeCSV(entry.tokenSource ?? ""))\n"
         }
 
         return csv
+    }
+
+    /// RFC 4180 compliant CSV escaping
+    private func escapeCSV(_ value: String) -> String {
+        let needsQuoting = value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")
+        if needsQuoting {
+            let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+            return "\"\(escaped)\""
+        }
+        return value
     }
 
     // MARK: - Private Methods
@@ -247,15 +319,28 @@ class NetworkLogger: ObservableObject {
     }
 
     private func parseLogLine(_ line: String) -> ConnectionLogEntry? {
-        let fields = line.split(separator: ",", omittingEmptySubsequences: false)
+        let fields = parseCSVLine(line)
         guard fields.count >= 6 else { return nil }
 
-        let timestampString = String(fields[0])
-        let app = String(fields[1])
-        let remoteHost = String(fields[2])
-        let remotePort = String(fields[3])
-        let direction = String(fields[4])
-        let action = String(fields[5])
+        let timestampString = fields[0]
+        let app = fields[1]
+        let remoteHost = fields[2]
+        let remotePort = fields[3]
+        let direction = fields[4]
+        let action = fields[5]
+        let localHost = stringFieldFromParsed(fields, index: 6)
+        let localPort = stringFieldFromParsed(fields, index: 7)
+        let remoteHostname = stringFieldFromParsed(fields, index: 8)
+        let protocolName = stringFieldFromParsed(fields, index: 9)
+        let socketFamily = intFieldFromParsed(fields, index: 10)
+        let socketType = intFieldFromParsed(fields, index: 11)
+        let socketProtocol = intFieldFromParsed(fields, index: 12)
+        let pid = intFieldFromParsed(fields, index: 13)
+        let processPath = stringFieldFromParsed(fields, index: 14)
+        let processName = stringFieldFromParsed(fields, index: 15)
+        let flowIdentifier = stringFieldFromParsed(fields, index: 16)
+        let url = stringFieldFromParsed(fields, index: 17)
+        let tokenSource = stringFieldFromParsed(fields, index: 18)
 
         let timestamp = timestampFormatter.date(from: timestampString) ?? Date()
 
@@ -265,8 +350,87 @@ class NetworkLogger: ObservableObject {
             remoteHost: remoteHost,
             remotePort: remotePort,
             direction: direction,
-            action: action
+            action: action,
+            localHost: localHost,
+            localPort: localPort,
+            remoteHostname: remoteHostname,
+            protocolName: protocolName,
+            socketFamily: socketFamily,
+            socketType: socketType,
+            socketProtocol: socketProtocol,
+            pid: pid,
+            processPath: processPath,
+            processName: processName,
+            flowIdentifier: flowIdentifier,
+            url: url,
+            tokenSource: tokenSource
         )
+    }
+
+    /// RFC 4180 compliant CSV line parser
+    private func parseCSVLine(_ line: String) -> [String] {
+        var fields: [String] = []
+        var current = ""
+        var inQuotes = false
+        var iterator = line.makeIterator()
+
+        while let char = iterator.next() {
+            if inQuotes {
+                if char == "\"" {
+                    // Check if next char is also a quote (escaped quote)
+                    if let next = iterator.next() {
+                        if next == "\"" {
+                            current.append("\"")
+                        } else {
+                            inQuotes = false
+                            if next == "," {
+                                fields.append(current)
+                                current = ""
+                            } else {
+                                current.append(next)
+                            }
+                        }
+                    } else {
+                        inQuotes = false
+                    }
+                } else {
+                    current.append(char)
+                }
+            } else {
+                if char == "\"" {
+                    inQuotes = true
+                } else if char == "," {
+                    fields.append(current)
+                    current = ""
+                } else {
+                    current.append(char)
+                }
+            }
+        }
+        fields.append(current)
+        return fields
+    }
+
+    private func stringFieldFromParsed(_ fields: [String], index: Int) -> String? {
+        guard fields.count > index else { return nil }
+        let value = fields[index]
+        return value.isEmpty ? nil : value
+    }
+
+    private func intFieldFromParsed(_ fields: [String], index: Int) -> Int? {
+        guard let value = stringFieldFromParsed(fields, index: index) else { return nil }
+        return Int(value)
+    }
+
+    private func stringField(_ fields: [Substring], index: Int) -> String? {
+        guard fields.count > index else { return nil }
+        let value = String(fields[index])
+        return value.isEmpty ? nil : value
+    }
+
+    private func intField(_ fields: [Substring], index: Int) -> Int? {
+        guard let value = stringField(fields, index: index) else { return nil }
+        return Int(value)
     }
 
     private func registerNotificationObserver() {
@@ -306,11 +470,24 @@ class NetworkLogger: ObservableObject {
 
     private func parseNotification(_ userInfo: [AnyHashable: Any]) -> ConnectionLogEntry? {
         let timestamp = userInfo["timestamp"] as? TimeInterval ?? Date().timeIntervalSince1970
-        let sourceApp = userInfo["sourceAppIdentifier"] as? String ?? "Unknown"
-        let remoteHost = userInfo["remoteHost"] as? String ?? "Unknown"
-        let remotePort = userInfo["remotePort"] as? String ?? "0"
-        let direction = userInfo["direction"] as? String ?? "unknown"
-        let action = userInfo["action"] as? String ?? "allowed"
+        let sourceApp = stringValue(userInfo["sourceAppIdentifier"]) ?? "Unknown"
+        let remoteHost = stringValue(userInfo["remoteHost"]) ?? "Unknown"
+        let remotePort = stringValue(userInfo["remotePort"]) ?? "0"
+        let direction = stringValue(userInfo["direction"]) ?? "unknown"
+        let action = stringValue(userInfo["action"]) ?? "allowed"
+        let localHost = stringValue(userInfo["localHost"])
+        let localPort = stringValue(userInfo["localPort"])
+        let remoteHostname = stringValue(userInfo["remoteHostname"])
+        let protocolName = stringValue(userInfo["protocolName"])
+        let socketFamily = intValue(userInfo["socketFamily"])
+        let socketType = intValue(userInfo["socketType"])
+        let socketProtocol = intValue(userInfo["socketProtocol"])
+        let pid = intValue(userInfo["pid"])
+        let processPath = stringValue(userInfo["processPath"])
+        let processName = stringValue(userInfo["processName"])
+        let flowIdentifier = stringValue(userInfo["flowIdentifier"])
+        let url = stringValue(userInfo["url"])
+        let tokenSource = stringValue(userInfo["tokenSource"])
 
         return ConnectionLogEntry(
             timestamp: Date(timeIntervalSince1970: timestamp),
@@ -318,8 +495,45 @@ class NetworkLogger: ObservableObject {
             remoteHost: remoteHost,
             remotePort: remotePort,
             direction: direction,
-            action: action
+            action: action,
+            localHost: localHost,
+            localPort: localPort,
+            remoteHostname: remoteHostname,
+            protocolName: protocolName,
+            socketFamily: socketFamily,
+            socketType: socketType,
+            socketProtocol: socketProtocol,
+            pid: pid,
+            processPath: processPath,
+            processName: processName,
+            flowIdentifier: flowIdentifier,
+            url: url,
+            tokenSource: tokenSource
         )
+    }
+
+    private func stringValue(_ value: Any?) -> String? {
+        guard let value = value else { return nil }
+        if let string = value as? String {
+            return string.isEmpty ? nil : string
+        }
+        if let number = value as? NSNumber {
+            return number.stringValue
+        }
+        return nil
+    }
+
+    private func intValue(_ value: Any?) -> Int? {
+        if let intValue = value as? Int {
+            return intValue
+        }
+        if let number = value as? NSNumber {
+            return number.intValue
+        }
+        if let string = value as? String {
+            return Int(string)
+        }
+        return nil
     }
 
     private func startUDPListener() {
